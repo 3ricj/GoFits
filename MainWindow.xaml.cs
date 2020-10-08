@@ -11,10 +11,12 @@ using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using System.Windows.Navigation;
-using System.Windows.Shapes;
+//using System.Windows.Shapes;
 using nom.tam.fits;
 using nom.tam.image;
 using nom.tam.util;
+using System.IO;
+
 
 
 namespace GoFits
@@ -36,18 +38,44 @@ namespace GoFits
             {
                 InputFileTextBox.Text = dialog.SelectedPath;
             }
-            Fits f = new Fits("c:/temp/test.fits");
+
+        }
+        protected string GetOutputPath(string imageFilePath)
+        {
+            return Path.Combine(Path.GetDirectoryName(imageFilePath), Path.GetFileNameWithoutExtension(imageFilePath)) + ".ini";
+        }
+        private (double RA, double DEC) ReadFitsHeader(string Filename)
+        {
+
+            Fits f = new Fits(Filename);
+            
             ImageHDU h = (ImageHDU)f.ReadHDU();
+            // h myHeader cards [nom.tam.util.hashed list]
+            //Object[][] data = (Object[][])h.Header.GetStringValue("SIMPLE")); 
+            //            if (h.Header.)
+            // IMAGETYP= 'LIGHT'   
+            // NAXIS1  =                 7380 /
+            // NAXIS2 = 4908 
+            // EXPTIME =                  6.0 / [s] Exposure duration
+            // DATE-LOC= '2020-10-07T01:28:55.164' / Time of observation (local)
+            //     GAIN    =                 1208 / Sensor gain
+            //     XPIXSZ  =                 4.88 / [um] Pixel X axis size
+            // YPIXSZ = 4.88 / [um] Pixel Y axis size
+            //     SITELAT =     47.6077777777778 / [deg] Observation site latitude
+            // SITELONG = -122.335 / [deg] Observation site longitude]
 
-            /*
-            Object[][] data = (Object[][])h.getData().getData();
 
-            for (int i = 0; i < data.length; i += 1)
-            {
-                int[] params = (int[])data[i][0];
-                int[][] img = (int[][])data[i][1];
-                ... Process a group...
-    }*/
+
+            double RA = h.Header.GetDoubleValue("RA");
+            double DEC = h.Header.GetDoubleValue("DEC");
+            return (RA, DEC);
+
+        }
+        private void Button_Click_1(object sender, RoutedEventArgs e)
+        {
+            (double RA, double DEC) = ReadFitsHeader("c:/temp/test.fits");
+            Console.WriteLine("RA" + RA);
+            Console.WriteLine("DEC" + DEC);
         }
     }
 }

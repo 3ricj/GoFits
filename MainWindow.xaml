@@ -9,7 +9,7 @@
     <Grid>
         <Button Content="Browse" HorizontalAlignment="Left" Margin="624,56,0,0" VerticalAlignment="Top" Width="75" Click="Button_Click"/>
         <TextBox x:Name="InputFileTextBox" HorizontalAlignment="Left" Height="23" Margin="141,53,0,0" TextWrapping="Wrap" VerticalAlignment="Top" Width="460"/>
-        <Button Content="Button" HorizontalAlignment="Left" Margin="604,105,0,0" VerticalAlignment="Top" Width="75"/>
+        <Button Content="Process" HorizontalAlignment="Left" Margin="604,105,0,0" VerticalAlignment="Top" Width="75" Click="Button_Click_1"/>
         <RichTextBox HorizontalAlignment="Left" Height="179" Margin="100,153,0,0" VerticalAlignment="Top" Width="579">
             <FlowDocument>
                 <Paragraph>

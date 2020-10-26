@@ -43,36 +43,42 @@ namespace GoFits
         {
             return Path.Combine(Path.GetDirectoryName(imageFilePath), Path.GetFileNameWithoutExtension(imageFilePath)) + ".ini";
         }
-        private (double RA, double DEC) ReadFitsHeader(string Filename)
+        private (double RA, double DEC, float[][] ImageData) ReadFits(string Filename)
         {
             double RA;
-            double DEC; 
+            double DEC;
+            float[][] imageData;
+
 
             try
             {
                 Fits f = new Fits(Filename);
 
                 ImageHDU h = (ImageHDU)f.ReadHDU();
-
-                //other things we might want: 
-                // IMAGETYP= 'LIGHT'   
-                // NAXIS1  =                 7380 /
-                // NAXIS2 = 4908 
-                // EXPTIME =                  6.0 / [s] Exposure duration
-                // DATE-LOC= '2020-10-07T01:28:55.164' / Time of observation (local)
-                //     GAIN    =                 1208 / Sensor gain
-                //     XPIXSZ  =                 4.88 / [um] Pixel X axis size
-                // YPIXSZ = 4.88 / [um] Pixel Y axis size
-                //     SITELAT =     47.6077777777778 / [deg] Observation site latitude
-                // SITELONG = -122.335 / [deg] Observation site longitude]
-
-                RA = h.Header.GetDoubleValue("RA") / 15;
-                DEC = h.Header.GetDoubleValue("DEC");
-                f.Close();
                 
-            } catch { Console.WriteLine("Error opening fits..");  return (-1, -1);  }
 
-            return (RA, DEC);
+               //other things we might want: 
+               // IMAGETYP= 'LIGHT'   
+               // NAXIS1  =                 7380 /
+               // NAXIS2 = 4908 
+               // EXPTIME =                  6.0 / [s] Exposure duration
+               // DATE-LOC= '2020-10-07T01:28:55.164' / Time of observation (local)
+               //     GAIN    =                 1208 / Sensor gain
+               //     XPIXSZ  =                 4.88 / [um] Pixel X axis size
+               // YPIXSZ = 4.88 / [um] Pixel Y axis size
+               //     SITELAT =     47.6077777777778 / [deg] Observation site latitude
+               // SITELONG = -122.335 / [deg] Observation site longitude]
+
+               RA = h.Header.GetDoubleValue("RA") / 15;
+               DEC = h.Header.GetDoubleValue("DEC");
+               imageData = (float[][])h.Kernel;
+
+                f.Close();
+
+            }
+            catch { Console.WriteLine("Error opening fits.."); return (-1, -1); }
+
+            return (RA, DEC, imageData);
 
         }
         private string GetArguments(string imageFilePath, double RA, double DEC)
@@ -81,6 +87,9 @@ namespace GoFits
             args.Add($"-f \"{imageFilePath}\"");
             //args.Add($"-z 4");
             args.Add($"-s 500");
+            //args.Add($"-analyse");
+
+
             if (RA != -1)
             {
                 args.Add($"-r 30"); // search radius
@@ -88,17 +97,19 @@ namespace GoFits
                 var spd = Math.Round(DEC + 90.0, 6);
                 args.Add($"-spd {spd.ToString()}");
 
-            } else {
+            }
+            else
+            {
                 //Search field radius
                 args.Add($"-r {180}");
             }
-        
-        return string.Join(" ", args);
+
+            return string.Join(" ", args);
 
         }
-        private void ExecuteAstap( string args)
+        private void ExecuteAstap(string args)
         {
-            string executableLocation = "c:\\Program Files\\astap\\astap.exe"; 
+            string executableLocation = "c:\\Program Files\\astap\\astap.exe";
 
             System.Diagnostics.Process process = new System.Diagnostics.Process();
             System.Diagnostics.ProcessStartInfo startInfo = new System.Diagnostics.ProcessStartInfo();
@@ -113,7 +124,7 @@ namespace GoFits
             process.EnableRaisingEvents = true;
             process.Start();
             string result = process.StandardOutput.ReadToEnd();
-            
+
 
         }
         private PlateSolveResult ReadAstapOutput(string outputfile)
@@ -124,11 +135,14 @@ namespace GoFits
                 .Select(line => line.Split(new char[] { '=' }, 2, 0))
                 .ToDictionary(parts => parts[0], parts => parts[1]);
 
+            //dict.TryGetValue("PLTSOLVD", out var solve_result);
+            if (Convert.ToString(dict["PLTSOLVD"]) == "F") { return result; }
+
             dict.TryGetValue("WARNING", out var warning);
 
             result.Ra = double.Parse(dict["CRVAL1"]) / 15;
 
-           result.Dec = double.Parse(dict["CRVAL2"]);
+            result.Dec = double.Parse(dict["CRVAL2"]);
             result.Orientation = double.Parse(dict["CROTA2"]);
             //result.Orientation = double.Parsedict["CRVAL2"]);
 
@@ -139,33 +153,95 @@ namespace GoFits
         private void Button_Click_1(object sender, RoutedEventArgs e)
         {
 
-            string imageFilePath = "c:\\temp\\test.fits";
-            string outputFilePath = GetOutputPath(imageFilePath);
+            string baseDirectory = InputFileTextBox.Text;
 
-            
-            (double RA, double DEC) = ReadFitsHeader(imageFilePath);
-            Console.WriteLine("Input Ra (hours): " + RA);
-            Console.WriteLine("Input Dec (degrees):" + DEC);
-
-            string ASTAP_args = GetArguments(imageFilePath, RA, DEC);
-            PlateSolveResult results = new PlateSolveResult();
-
-            if (File.Exists(outputFilePath)) {
-                results = ReadAstapOutput(outputFilePath);
-            } else {
-
-                ExecuteAstap(ASTAP_args);
-
-                if (!File.Exists(outputFilePath)) { Console.WriteLine("error, plate solve failed..."); } else
-                {
-                    results = ReadAstapOutput(outputFilePath);
-                }
-                
+            IEnumerable<string> filesToSolve = Enumerable.Empty<string>();
+            try
+            {
+                filesToSolve = Directory.EnumerateFiles(baseDirectory, "*.fits", SearchOption.AllDirectories);
             }
-            Console.WriteLine("Output Ra:  " + results.Ra);
-            Console.WriteLine("Output Dec:  " + results.Dec);
-            Console.WriteLine("Output orientation:  " + results.Orientation);
+            catch (IOException ex)
+            {
+                Console.WriteLine("Error enumerating path" + ex);
+            }
 
+
+            //ParallelOptions options = new ParallelOptions { MaxDegreeOfParallelism = 1 };
+            foreach (var imageFilePath in filesToSolve)
+            //Parallel.ForEach(filesToSolve, imageFilePath =>
+            {
+                try
+                {
+
+                    string outputFilePath = GetOutputPath(imageFilePath);
+                    Console.WriteLine("FIle: " + imageFilePath);
+
+
+                    (double RA, double DEC, float[][] ImageData) = ReadFits(imageFilePath);
+
+                    Console.WriteLine("Input Ra (hours): " + RA);
+                    Console.WriteLine("Input Dec (degrees):" + DEC);
+
+                    string ASTAP_args = GetArguments(imageFilePath, RA, DEC);
+                    PlateSolveResult results = new PlateSolveResult();
+
+                    if (File.Exists(outputFilePath))
+                    {
+                        results = ReadAstapOutput(outputFilePath);
+                    }
+                    else
+                    {
+
+                        ExecuteAstap(ASTAP_args);
+
+                        if (!File.Exists(outputFilePath)) { Console.WriteLine("error, plate solve failed..."); }
+                        else
+                        {
+                            results = ReadAstapOutput(outputFilePath);
+                        }
+
+                    }
+                    Console.WriteLine("Output Ra:  " + results.Ra);
+                    Console.WriteLine("Output Dec:  " + results.Dec);
+                    Console.WriteLine("Output orientation:  " + results.Orientation);
+                }
+                catch (IOException ex)
+                {
+                    Console.WriteLine("Error accessing file" + ex);
+                }
+
+
+            };
+
+            /*
+
+                string imageFilePath = "c:\\temp\\test.fits";
+                string outputFilePath = GetOutputPath(imageFilePath);
+
+
+                (double RA, double DEC) = ReadFitsHeader(imageFilePath);
+                Console.WriteLine("Input Ra (hours): " + RA);
+                Console.WriteLine("Input Dec (degrees):" + DEC);
+
+                string ASTAP_args = GetArguments(imageFilePath, RA, DEC);
+                PlateSolveResult results = new PlateSolveResult();
+
+                if (File.Exists(outputFilePath)) {
+                    results = ReadAstapOutput(outputFilePath);
+                } else {
+
+                    ExecuteAstap(ASTAP_args);
+
+                    if (!File.Exists(outputFilePath)) { Console.WriteLine("error, plate solve failed..."); } else
+                    {
+                        results = ReadAstapOutput(outputFilePath);
+                    }
+
+                }
+                Console.WriteLine("Output Ra:  " + results.Ra);
+                Console.WriteLine("Output Dec:  " + results.Dec);
+                Console.WriteLine("Output orientation:  " + results.Orientation);
+                */
 
 
         }

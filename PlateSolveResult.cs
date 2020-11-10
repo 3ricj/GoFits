@@ -17,7 +17,7 @@ namespace GoFits
 
         public DateTime SolveTime { get; private set; }
 
-        private double _orientation;
+        //private double _orientation;
 
         public double Orientation { get; set; }
         /*{
@@ -32,8 +32,8 @@ namespace GoFits
 
         public double Radius { get; set; }
 
-        public double Ra { get; set; }
-        public double Dec { get; set; }
+        public double RaDeg { get; set; }
+        public double DecDeg { get; set; }
 
 
         public bool Success { get; set; }

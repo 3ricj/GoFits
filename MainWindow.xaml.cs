@@ -23,6 +23,9 @@ using System.Globalization;
 using ASCOM.Astrometry.Transform;
 using ASCOM.Utilities;
 using System.Diagnostics;
+using MetadataExtractor;
+using MetadataExtractor.Formats.Exif;
+using System.Text.RegularExpressions;
 
 namespace GoFits
 {
@@ -119,7 +122,7 @@ namespace GoFits
             return (fitsheader);
 
         }
-        private string GetArguments(string imageFilePath, double RA, double DEC)
+        private string GetArguments(string imageFilePath, double RA, double DEC, double vfov)
         {
             var args = new List<string>();
             args.Add($"-f \"{imageFilePath}\"");
@@ -141,6 +144,10 @@ namespace GoFits
                 //Search field radius
                 args.Add($"-r {180}");
             }
+            if (vfov != -1)
+            {
+                args.Add($"-fov {vfov.ToString()}");
+            }
 
             return string.Join(" ", args);
 
@@ -149,13 +156,37 @@ namespace GoFits
         {
             // Path.Combine(Path.GetDirectoryName(imageFilePath), Path.GetFileNameWithoutExtension(imageFilePath)) + ".ini";
             string destinationFile = Path.Combine(Path.GetDirectoryName(Filename), Path.GetFileNameWithoutExtension(Filename)) + ".ini";
+            string WCSdestinationFile = Path.Combine(Path.GetDirectoryName(Filename), Path.GetFileNameWithoutExtension(Filename)) + ".wcs";
+            string ASTAP_args;
+
+            if (File.Exists(destinationFile) && File.Exists(WCSdestinationFile)) { return ReadAstapOutput(destinationFile); }
+
+            double vfov = -1;
+
+            if (Path.GetExtension(Filename).ToUpper() == ".CR2" || Path.GetExtension(Filename).ToUpper() == ".CR3" || Path.GetExtension(Filename).ToUpper() == ".TIF")
+            {
+                IEnumerable<MetadataExtractor.Directory> directories = ImageMetadataReader.ReadMetadata(Filename);
+                var subIfdDirectory = directories.OfType<ExifSubIfdDirectory>().FirstOrDefault();
+                //                var dateTime = subIfdDirectory?.GetDescription(ExifDirectoryBase.TagDateTime);
+                try
+                {
+                    double focalLen = Convert.ToDouble(Regex.Replace(subIfdDirectory?.GetDescription(ExifDirectoryBase.TagFocalLength), @" mm", ""));
+                    if (focalLen != 0) { vfov = 2 * Math.Atan(12 / focalLen); }   //  12 is half the height of the 24mm tall sensor 
+                    vfov = (180 / Math.PI) * vfov;
+                }
+                catch { Console.WriteLine(" Error reading exif from file... "); }
+
+            }
+//            else if ( Path.GetExtension(Filename) == ".fits" || Path.GetExtension(Filename) == ".fit" ) {
+ //               ASTAP_args = GetArguments(Filename, -1, -1, -1);
+ //           }
+
+            ASTAP_args = GetArguments(Filename, -1, -1, vfov);
+
+            Console.WriteLine("plate solve args: " + ASTAP_args);
 
 
-            if (File.Exists(destinationFile)) { return ReadAstapOutput(destinationFile); }
-
-            string ASTAP_args = GetArguments(Filename, -1, -1);
-
-            string executableLocation = "c:\\Program Files\\astap\\astap.exe";
+            string executableLocation = @"c:\Program Files\astap\astap.exe";
 
             System.Diagnostics.Process process = new System.Diagnostics.Process();
             System.Diagnostics.ProcessStartInfo startInfo = new System.Diagnostics.ProcessStartInfo();
@@ -197,7 +228,44 @@ namespace GoFits
             return result;
 
         }
+        private void MakeThumbNails(string Filename, int ImageHeight, int ImageWidth)
+        {
 
+            string CenterThumb = Path.Combine(Path.GetDirectoryName(Filename), Path.GetFileNameWithoutExtension(Filename)) + "-centerthumb.jpg";
+            string CornerThumb= Path.Combine(Path.GetDirectoryName(Filename), Path.GetFileNameWithoutExtension(Filename)) + "-cornerthumb.jpg";
+            string Thumb = Path.Combine(Path.GetDirectoryName(Filename), Path.GetFileNameWithoutExtension(Filename)) + "-thumb.jpg";
+
+            ProcessStartInfo start = new ProcessStartInfo();
+            System.Diagnostics.Process p;
+            start.FileName = @"c:\Program Files\IrfanView\i_view64.exe"; // note this needs to have the plugins installed in addition to the executable.  It needs to be able to open fits files to work.
+            start.WindowStyle = ProcessWindowStyle.Hidden;
+            start.CreateNoWindow = true;
+
+
+            if (!File.Exists(Thumb)) {
+                start.Arguments = Filename + "/convert=" + Thumb;
+                p = Process.Start(start);
+                p.WaitForExit();
+            }
+            if (!File.Exists(CenterThumb)) {
+                int Xpos = (int)(((double)ImageHeight / 2) - 100);
+                int Ypos = (int)(((double)ImageWidth / 2) - 100);
+                                start.Arguments = Filename + "/crop=(" + Xpos +  "," + Ypos + ",200,200) /resize=(600,600) /convert=" + CenterThumb;
+                p = Process.Start(start);
+                p.WaitForExit();
+            }
+            if (!File.Exists(CornerThumb)) {
+                start.Arguments = Filename + "/crop=(0,0,200,200) /resize=(600,600) /convert=" + CornerThumb;
+                p = Process.Start(start);
+                p.WaitForExit();
+            }
+
+            /*  
+            /crop=(2918,1918,200,200) /resize=(600,600) /contrast=100 /convert="J:\temp\Analyze_test\Panel 5_6.00s_200g_0001-CENTERTHUMB.jpg"
+            /crop=(0,0,200,200) /resize=(600,600) /contrast=100 /convert="J:\temp\Analyze_test\Panel 5_6.00s_200g_0001-CORNERTHUMB.jpg"
+            /contrast=100 /convert="J:\temp\Analyze_test\Panel 5_6.00s_200g_0001-THUMB.jpg"
+            */
+        }
         private void ExecuteAnalyze(string Filename)
         {
 
@@ -207,8 +275,14 @@ namespace GoFits
             if (File.Exists(destinationFile)) { return; }
 
             string cwd = Path.Combine(Path.GetTempPath(), "MaxPilote-Thread" + Thread.CurrentThread.ManagedThreadId.ToString());
-            if (!Directory.Exists(cwd)) { Directory.CreateDirectory(cwd); }
+            if (!System.IO.Directory.Exists(cwd)) { System.IO.Directory.CreateDirectory(cwd); }
 
+            // Max Pilote doesn't read CR2 files.. maybe TIF? 
+            if (Path.GetExtension(Filename).ToUpper() == ".CR2" || Path.GetExtension(Filename).ToUpper() == ".CR3")
+            {
+
+
+            }
 
             //Console.WriteLine(OutputFileName);
 
@@ -255,7 +329,7 @@ namespace GoFits
             // cleanup
 
             if (File.Exists(sourceFile)) { File.Delete(StarsFile); }
-            if (Directory.Exists(cwd)) { Directory.Delete(cwd); }
+            if (System.IO.Directory.Exists(cwd)) { System.IO.Directory.Delete(cwd); }
 
 
         }
@@ -284,19 +358,24 @@ namespace GoFits
             IEnumerable<string> filesToSolve = Enumerable.Empty<string>();
             try
             {
-                filesToSolve = Directory.EnumerateFiles(baseDirectory, "*.fits", SearchOption.AllDirectories);
+                filesToSolve = System.IO.Directory.EnumerateFiles(baseDirectory, "*.fits", SearchOption.AllDirectories)
+                    .Union(System.IO.Directory.EnumerateFiles(baseDirectory, "*.cr2", SearchOption.AllDirectories))
+                    .Union(System.IO.Directory.EnumerateFiles(baseDirectory, "*.tif", SearchOption.AllDirectories));
+                /*var directory = new DirectoryInfo(baseDirectory);
+                var masks = new[] { "*.cr2", "*.fits" };
+               filesToSolve =  masks.SelectMany(directory.EnumerateFiles); */
             }
             catch (IOException ex)
             {
                 Console.WriteLine("Error enumerating path" + ex);
             }
 
-            string outputcsv_log = Path.Combine(baseDirectory, "gofits-3.csv"); 
+            string outputcsv_log = Path.Combine(baseDirectory, "gofits-4.csv"); 
             var csvWriter = new ChoCSVWriter<FitsRecord>(outputcsv_log).WithFirstLineHeader();
             object WriteLock = new object();
 
             
-            ParallelOptions options = new ParallelOptions { MaxDegreeOfParallelism = 20 };
+            ParallelOptions options = new ParallelOptions { MaxDegreeOfParallelism = 8 };
             //foreach (var imageFilePath in filesToSolve)
             Parallel.ForEach(filesToSolve, options, imageFilePath =>
             {
@@ -305,17 +384,18 @@ namespace GoFits
                 {
 
                     //string outputFilePath = GetOutputPath(imageFilePath);
-                    Console.Write( imageFilePath);
-
+                    Console.Write(imageFilePath);
                     FitsHeader fitsheader = new FitsHeader();
-                    fitsheader = ReadFits(imageFilePath);
 
+                    if (Path.GetExtension(imageFilePath) == "fits") { 
+                        fitsheader = ReadFits(imageFilePath);
+                    }
                     Console.Write(",Input Ra (degrees): " + fitsheader.RaDeg);
                     Console.Write(",Input Dec (degrees):" + fitsheader.DecDeg);
 
 
                     PlateSolveResult platesolveresults = new PlateSolveResult();
-                    platesolveresults = ExecuteAstap(imageFilePath);
+                    //platesolveresults = ExecuteAstap(imageFilePath);
 
                     
                     Console.Write(",Output Ra:  " + platesolveresults.RaDeg);
@@ -325,7 +405,7 @@ namespace GoFits
                     string AnalyzeFilename = Path.Combine(Path.GetDirectoryName(imageFilePath), Path.GetFileNameWithoutExtension(imageFilePath)) + ".csv";
                     ExecuteAnalyze(imageFilePath);
 
-
+                    MakeThumbNails(imageFilePath, fitsheader.NAXIS1, fitsheader.NAXIS2);
 
                     lock (WriteLock)
                     {
@@ -395,6 +475,8 @@ namespace GoFits
             );
 
             csvWriter.Close();
+            Console.WriteLine("Completed..."); 
+
             /*
 
                 string imageFilePath = "c:\\temp\\test.fits";
@@ -427,6 +509,6 @@ namespace GoFits
 
 
         }
-     
+
     }
 }

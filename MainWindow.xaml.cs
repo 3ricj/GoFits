@@ -161,6 +161,10 @@ namespace GoFits
 
             if (File.Exists(destinationFile) && File.Exists(WCSdestinationFile)) { return ReadAstapOutput(destinationFile); }
 
+            var PSRresult = new PlateSolveResult() { Success = false };
+            return PSRresult; 
+
+
             double vfov = -1;
 
             if (Path.GetExtension(Filename).ToUpper() == ".CR2" || Path.GetExtension(Filename).ToUpper() == ".CR3" || Path.GetExtension(Filename).ToUpper() == ".TIF")
@@ -387,7 +391,7 @@ namespace GoFits
                     Console.Write(imageFilePath);
                     FitsHeader fitsheader = new FitsHeader();
 
-                    if (Path.GetExtension(imageFilePath) == "fits") { 
+                    if (Path.GetExtension(imageFilePath) == ".fits") { 
                         fitsheader = ReadFits(imageFilePath);
                     }
                     Console.Write(",Input Ra (degrees): " + fitsheader.RaDeg);
@@ -395,7 +399,7 @@ namespace GoFits
 
 
                     PlateSolveResult platesolveresults = new PlateSolveResult();
-                    //platesolveresults = ExecuteAstap(imageFilePath);
+                    platesolveresults = ExecuteAstap(imageFilePath);
 
                     
                     Console.Write(",Output Ra:  " + platesolveresults.RaDeg);

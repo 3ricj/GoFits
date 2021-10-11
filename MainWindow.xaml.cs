@@ -161,8 +161,8 @@ namespace GoFits
 
             if (File.Exists(destinationFile) && File.Exists(WCSdestinationFile)) { return ReadAstapOutput(destinationFile); }
 
-            var PSRresult = new PlateSolveResult() { Success = false };
-            return PSRresult; 
+            //var PSRresult = new PlateSolveResult() { Success = false };
+            //return PSRresult; 
 
 
             double vfov = -1;

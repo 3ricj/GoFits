@@ -26,6 +26,7 @@ using System.Diagnostics;
 using MetadataExtractor;
 using MetadataExtractor.Formats.Exif;
 using System.Text.RegularExpressions;
+using ImageMagick;
 
 namespace GoFits
 {
@@ -109,10 +110,10 @@ namespace GoFits
                 DEC = h.Header.GetDoubleValue("DEC");
                 LocalDate = h.Header.GetStringValue("DATE-LOC");
                 SiteLat = h.Header.GetDoubleValue("SITELAT");
-                SiteLong = h.Header.GetDoubleValue("SITELAT");
+                SiteLong = h.Header.GetDoubleValue("SITELAT"); */
 
 
-                //imageData = (float[][])h.Kernel; */
+                float [][] imageData = (float[][])h.Kernel; 
 
 
             } catch { f.Close(); Console.WriteLine("Error opening fits.."); return (fitsheader); }
@@ -380,6 +381,11 @@ namespace GoFits
             
             ParallelOptions options = new ParallelOptions { MaxDegreeOfParallelism = 8 };
             //foreach (var imageFilePath in filesToSolve)
+            bool Go_platesolve = (bool)Platesolve_checkbox.IsChecked;
+            bool Go_AnalyzeStars = (bool)AnalyzeStars_checkbox.IsChecked;
+            bool Go_Thumbnails  = (bool)Thumbnails_checkbox.IsChecked;
+            bool Go_ImageStats = (bool)Fits_stats_checkbox.IsChecked; 
+
             Parallel.ForEach(filesToSolve, options, imageFilePath =>
             {
 
@@ -388,38 +394,63 @@ namespace GoFits
 
                     //string outputFilePath = GetOutputPath(imageFilePath);
                     Console.Write(imageFilePath);
+                    FitsRecord fitsrecord = new FitsRecord();
+                    fitsrecord.Filename = imageFilePath;
+
                     FitsHeader fitsheader = new FitsHeader();
 
-                    if (Path.GetExtension(imageFilePath) == ".fits") { 
-                        fitsheader = ReadFits(imageFilePath);
-                    }
-                    Console.Write(",Input Ra (degrees): " + fitsheader.RaDeg);
-                    Console.Write(",Input Dec (degrees):" + fitsheader.DecDeg);
+                        if (Path.GetExtension(imageFilePath) == ".fits")
+                        {
+                            fitsheader = ReadFits(imageFilePath);
+                        }
 
-
-                    PlateSolveResult platesolveresults = new PlateSolveResult();
-                    platesolveresults = ExecuteAstap(imageFilePath);
-
-                    
-                    Console.Write(",Output Ra:  " + platesolveresults.RaDeg);
-                    Console.Write(",Output Dec:  " + platesolveresults.DecDeg);
-                    Console.WriteLine(",Output orientation:  " + platesolveresults.Orientation);
-
-                    string AnalyzeFilename = Path.Combine(Path.GetDirectoryName(imageFilePath), Path.GetFileNameWithoutExtension(imageFilePath)) + ".csv";
-                    ExecuteAnalyze(imageFilePath);
-
-                    MakeThumbNails(imageFilePath, fitsheader.NAXIS1, fitsheader.NAXIS2);
-
-                    lock (WriteLock)
+                    if (Go_platesolve)
                     {
-                        FitsRecord fitsrecord = new FitsRecord();
-                        fitsrecord.Filename = imageFilePath;
+                        Console.Write(",Input Ra (degrees): " + fitsheader.RaDeg);
+                        Console.Write(",Input Dec (degrees):" + fitsheader.DecDeg);
+
+
+                        PlateSolveResult platesolveresults = new PlateSolveResult();
+                        platesolveresults = ExecuteAstap(imageFilePath);
                         fitsrecord.RequestedDecDeg = fitsheader.DecDeg;
                         fitsrecord.RequestedRaDeg = fitsheader.RaDeg;
                         fitsrecord.SolvedDecDeg = platesolveresults.DecDeg;
                         fitsrecord.SolvedRaDeg = platesolveresults.RaDeg;
                         fitsrecord.SolvedOrientation = platesolveresults.Orientation;
 
+                        Console.Write(",Output Ra:  " + platesolveresults.RaDeg);
+                        Console.Write(",Output Dec:  " + platesolveresults.DecDeg);
+                        Console.WriteLine(",Output orientation:  " + platesolveresults.Orientation);
+                    }
+
+                    if (Go_AnalyzeStars)
+                    {
+                        string AnalyzeFilename = Path.Combine(Path.GetDirectoryName(imageFilePath), Path.GetFileNameWithoutExtension(imageFilePath)) + ".csv";
+                        ExecuteAnalyze(imageFilePath);
+                        if (File.Exists(AnalyzeFilename))
+                        {
+                            foreach (var rec in new ChoCSVReader<AnalyzeResult>(AnalyzeFilename).WithDelimiter(";"))
+                            {
+                                fitsrecord.FWHM = rec.FWHM;
+                                fitsrecord.RND = rec.RND;
+                                fitsrecord.background = rec.background;
+                                fitsrecord.SNR = rec.SNR;
+                                fitsrecord.StarCount = rec.StarCount;
+                                fitsrecord.Collim = rec.Collim;
+                                fitsrecord.Unknown0 = rec.Unknown0;
+
+                            }
+                        }
+                    }
+
+                    if (Go_Thumbnails)
+                    {
+                        MakeThumbNails(imageFilePath, fitsheader.NAXIS1, fitsheader.NAXIS2);
+                    }
+
+
+                    lock (WriteLock)
+                    {
 
                         fitsrecord.ImageType = fitsheader.ImageType;
                         fitsrecord.NAXIS1 = fitsheader.NAXIS1;
@@ -443,20 +474,7 @@ namespace GoFits
                         //    (fitsheader.LocalDate;);
 
 
-                        if (File.Exists(AnalyzeFilename))
-                        {
-                            foreach (var rec in new ChoCSVReader<AnalyzeResult>(AnalyzeFilename).WithDelimiter(";"))
-                            {
-                                fitsrecord.FWHM = rec.FWHM;
-                                fitsrecord.RND = rec.RND;
-                                fitsrecord.background = rec.background;
-                                fitsrecord.SNR = rec.SNR;
-                                fitsrecord.StarCount = rec.StarCount;
-                                fitsrecord.Collim = rec.Collim;
-                                fitsrecord.Unknown0 = rec.Unknown0;
 
-                            }
-                        }
 
                         csvWriter.Write(fitsrecord);
                         

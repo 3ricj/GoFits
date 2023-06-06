@@ -7,16 +7,21 @@
         mc:Ignorable="d"
         Title="MainWindow" Height="450" Width="800">
     <Grid>
-        <Button Content="Browse" HorizontalAlignment="Left" Margin="624,56,0,0" VerticalAlignment="Top" Width="75" Click="Button_Click"/>
-        <TextBox x:Name="InputFileTextBox" HorizontalAlignment="Left" Height="23" Margin="141,53,0,0" TextWrapping="Wrap" VerticalAlignment="Top" Width="460"/>
-        <Button Content="Process" HorizontalAlignment="Left" Margin="604,105,0,0" VerticalAlignment="Top" Width="75" Click="Button_Click_1"/>
-        <RichTextBox HorizontalAlignment="Left" Height="179" Margin="100,153,0,0" VerticalAlignment="Top" Width="579">
+        <Button Content="Browse" HorizontalAlignment="Left" Margin="628,134,0,0" VerticalAlignment="Top" Width="75" Click="Button_Click"/>
+        <TextBox x:Name="InputFileTextBox" HorizontalAlignment="Left" Height="23" Margin="145,131,0,0" TextWrapping="Wrap" VerticalAlignment="Top" Width="460"/>
+        <Button Content="Process" HorizontalAlignment="Left" Margin="608,183,0,0" VerticalAlignment="Top" Width="75" Click="Button_Click_1"/>
+        <RichTextBox HorizontalAlignment="Left" Height="98" Margin="141,239,0,0" VerticalAlignment="Top" Width="406" RenderTransformOrigin="0.496,0.47">
             <FlowDocument>
                 <Paragraph>
                     <Run Text="RichTextBox"/>
                 </Paragraph>
             </FlowDocument>
         </RichTextBox>
+        <CheckBox x:Name="Fits_stats_checkbox" Content="Make Fits-Stats" HorizontalAlignment="Left" Margin="145,32,0,0" VerticalAlignment="Top" IsChecked="True"/>
+        <CheckBox x:Name="Platesolve_checkbox" Content="PlateSolve" HorizontalAlignment="Left" Margin="307,32,0,0" VerticalAlignment="Top" IsChecked="True"/>
+        <CheckBox x:Name="Thumbnails_checkbox" Content="Thumbnails" HorizontalAlignment="Left" Margin="443,32,0,0" VerticalAlignment="Top"/>
+        <CheckBox x:Name="FullSizeTif_checkbox" Content="FullSizeTif" HorizontalAlignment="Left" Margin="594,32,0,0" VerticalAlignment="Top"/>
+        <CheckBox x:Name="AnalyzeStars_checkbox" Content="Analyze Stars" HorizontalAlignment="Left" Margin="145,70,0,0" VerticalAlignment="Top"/>
 
     </Grid>
 </Window>

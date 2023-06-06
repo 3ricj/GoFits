@@ -66,12 +66,12 @@ namespace GoFits
             FitsHeader fitsheader = new FitsHeader();
 
 
+            Fits f = new Fits(Filename);
+
+            ImageHDU h = (ImageHDU)f.ReadHDU();
+
             try
             {
-               Fits f = new Fits(Filename);
-
-               ImageHDU h = (ImageHDU)f.ReadHDU();
-
 
                 //other things we might want: 
                 // IMAGETYP= 'LIGHT'    
@@ -88,21 +88,21 @@ namespace GoFits
                 fitsheader.ImageType = h.Header.GetStringValue("IMAGETYP");
                 fitsheader.NAXIS1 = h.Header.GetIntValue("NAXIS1");
                 fitsheader.NAXIS2 = h.Header.GetIntValue("NAXIS2");
-                fitsheader.DecDeg = h.Header.GetDoubleValue("DEC");
-                fitsheader.RaDeg = h.Header.GetDoubleValue("RA") / 15;
+                fitsheader.PixelPitch = h.Header.GetFloatValue("XPIXSZ");
+                fitsheader.Gain = h.Header.GetIntValue("GAIN");
                 fitsheader.Exposure = h.Header.GetFloatValue("EXPOSURE");
+                fitsheader.SensorTempC = h.Header.GetFloatValue("CCD-TEMP");
 
 
-                fitsheader.LocalDate = DateTime.ParseExact(h.Header.GetStringValue("DATE-LOC"), "yyyy-MM-ddTHH:mm:ss.fff", CultureInfo.InvariantCulture);
+                //fitsheader.LocalDate = DateTime.ParseExact(h.Header.GetStringValue("DATE-LOC"), "yyyy-MM-ddTHH:mm:ss.fff", CultureInfo.InvariantCulture);
                 fitsheader.UTCDate = DateTime.ParseExact(h.Header.GetStringValue("DATE-OBS"), "yyyy-MM-ddTHH:mm:ss.fff", CultureInfo.InvariantCulture);
 
                 fitsheader.SiteLat = h.Header.GetDoubleValue("SITELAT");
                 fitsheader.SiteLong = h.Header.GetDoubleValue("SITELONG");
-                fitsheader.PixelPitch = h.Header.GetFloatValue("XPIXSZ");
-                fitsheader.Gain = h.Header.GetIntValue("GAIN");
-                fitsheader.SensorTempC = h.Header.GetFloatValue("CCD-TEMP");
                 fitsheader.FocalLength = h.Header.GetFloatValue("FOCALLEN");
                 fitsheader.Object = h.Header.GetStringValue("OBJECT");
+                fitsheader.DecDeg = h.Header.GetDoubleValue("DEC");
+//                fitsheader.RaDeg = h.Header.GetDoubleValue("RA") / 15;
 
 
                 /*RA = h.Header.GetDoubleValue("RA") / 15;
@@ -114,10 +114,9 @@ namespace GoFits
 
                 //imageData = (float[][])h.Kernel; */
 
-                f.Close();
 
-            }
-            catch { Console.WriteLine("Error opening fits.."); return (fitsheader); }
+            } catch { f.Close(); Console.WriteLine("Error opening fits.."); return (fitsheader); }
+            f.Close();
 
             return (fitsheader);
 
